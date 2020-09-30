@@ -8,3 +8,5 @@ install:
 - dotnet restore
 script:
 - dotnet build
+- dotnet test WebApi.Tests/WebApi.Tests.csproj
+- dotnet test Domain.Tests/Domain.Tests.csproj
