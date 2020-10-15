@@ -1,4 +1,4 @@
-# MyProjectBase
+# Project DotNetCore 3.1
 [![Build Status](https://travis-ci.com/carlosdiego/BaseProjectDotNetCore.svg?branch=master)](https://travis-ci.org/carlosdiego/BaseProjectDotNetCore)
 
 MyProjectBase is a DotNet Core 3.1 project that implements a "Mediator" partner
