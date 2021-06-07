@@ -40,22 +40,24 @@ namespace WebApi.Tests
         }
 
         [Fact]
-        public async Task When_Send_Request_For_Get_User_Then_Should_Be_Success()
+        public async Task When_Send_Request_For_Get_User_by_Name_Then_Should_Be_Success()
         {
             //Arrange
             var request = new GetUsersRequest();
+            request.Name = "test";
 
-            var userSimleGetResultViewModel = new UserViewModel[]
+
+            var userSimpleGetResultViewModel = new UserViewModel[]
             {
                 new UserViewModel
                 {
-                    Name = "Teste get"
+                    Name = "test"
                 }
             };
 
-            _mediator.Send(request).Returns(OperationResult.Success(userSimleGetResultViewModel));
+            _mediator.Send(request).Returns(OperationResult.Success(userSimpleGetResultViewModel));
             //Act
-            var response = await _sut.GetUsers();
+            var response = await _sut.GetUsersByName(request);
             var statusCodeResult = (IStatusCodeActionResult)response;
             //Assert
             Assert.True(statusCodeResult.StatusCode == StatusCodes.Status200OK);

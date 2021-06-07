@@ -23,5 +23,10 @@ namespace WebApi.Controllers
         [HttpGet("[action]")]
         public Task<IActionResult> GetUsers()
            => SendCommand(new GetUsersRequest());
+
+
+        [HttpGet("[action]")]
+        public Task<IActionResult> GetUsersByName([FromQuery] GetUsersRequest request)
+           => SendCommand(request);
     }
 }

@@ -16,7 +16,8 @@ namespace WebApi
         {
             var mediatorImplementations = new Type[]
             {
-                typeof(CreateUserRequestHandler)
+                typeof(CreateUserRequestHandler),
+                typeof(GetUsersRequestHandler)
             };
 
             services.AddMediatR(mediatorImplementations, config =>
