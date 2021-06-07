@@ -18,5 +18,10 @@ namespace WebApi.Controllers
         [HttpPost("[action]")]
         public Task<IActionResult> AddUser([FromBody] CreateUserRequest request)        
            => SendCommand(request);
+
+
+        [HttpGet("[action]")]
+        public Task<IActionResult> GetUsers()
+           => SendCommand(new GetUsersRequest());
     }
 }

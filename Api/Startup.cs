@@ -1,5 +1,7 @@
+using Core.Repositories;
 using Data;
-using IoC;
+using Data.Repositories;
+using Domain.Models;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
@@ -9,11 +11,18 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.OpenApi.Models;
 using SimpleInjector;
 using SimpleInjector.Lifestyles;
+using System;
+using System.Linq;
+using System.Reflection;
 
 namespace WebApi
 {
-    public class Startup
+    public partial class Startup
     {
+        private static readonly Type repoType = typeof(Repository<,>);
+
+        private static readonly Type entityType = typeof(Entity);
+
         private readonly Container _container = new Container();
         public Startup(IConfiguration configuration)
         {
@@ -28,11 +37,10 @@ namespace WebApi
             services.AddCors();
             services.AddDbContext<DataContext>(options => options.UseSqlServer(Configuration.GetConnectionString("DefaultConnection")));
             services.AddControllers();
-            IntegrateSimpleInjector(services);
+            Initialize(services);
             services.AddSwaggerGen(c =>
             {
                 c.SwaggerDoc("v1", new OpenApiInfo { Title = "My App", Version = "v1" });
-                //c.OperationFilter<SwaggerAddODataField>();
             });
         }
         
@@ -59,10 +67,6 @@ namespace WebApi
                 options.AllowAnyMethod();
                 options.AllowAnyHeader();
             });
-
-            app.UseSimpleInjector(_container);
-
-            InitializeContainer();
 
             _container.Verify();
 
@@ -91,8 +95,35 @@ namespace WebApi
             });
         }
 
-        // Add application services. For instance:
-        private void InitializeContainer()
-            => SimpleInjectorBootstrap.Initialize(_container);
+        public void Initialize(IServiceCollection services)
+        {
+            var specificRepos = entityType.Assembly
+                  .ExportedTypes
+                  .Where(t => t.IsClass && !t.IsAbstract && entityType.IsAssignableFrom(t))
+                  .Select(oneEntityType =>
+                  {
+                      var implementationType = repoType.MakeGenericType(oneEntityType, typeof(DataContext));
+                      var interfaceType = typeof(IRepository<>).MakeGenericType(oneEntityType);
+                      return (interfaceType, implementationType);
+                  });
+
+            foreach (var (interfaceType, implementationType) in specificRepos)
+                services.AddScoped(interfaceType, implementationType);
+
+            var typesToRegister = repoType.GetTypeInfo().Assembly.ExportedTypes.Select(t => t.GetTypeInfo());
+
+            var registrations = from type in typesToRegister
+                                let @interface = type.ImplementedInterfaces.FirstOrDefault(inter => inter.Name == $"I{type.Name}")
+                                where @interface != null && type.IsClass && !type.IsGenericType
+                                select (@interface, type.AsType());
+
+            foreach (var (@interface, @class) in registrations)
+                services.AddScoped(@interface, @class);
+
+            ConfigureValidators(services);
+            ConfigureMapper(services);
+            ConfigureMediator(services);
+        }
+
     }
 }

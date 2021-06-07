@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using NSubstitute;
 using Shared;
 using Shared.Request;
+using Shared.ViewModel;
 using System.Threading.Tasks;
 using WebApi.Controllers;
 using Xunit;
@@ -33,6 +34,28 @@ namespace WebApi.Tests
             _mediator.Send(request).Returns(OperationResult.Success());
             //Act
             var response = await _sut.AddUser(request);
+            var statusCodeResult = (IStatusCodeActionResult)response;
+            //Assert
+            Assert.True(statusCodeResult.StatusCode == StatusCodes.Status200OK);
+        }
+
+        [Fact]
+        public async Task When_Send_Request_For_Get_User_Then_Should_Be_Success()
+        {
+            //Arrange
+            var request = new GetUsersRequest();
+
+            var userSimleGetResultViewModel = new UserViewModel[]
+            {
+                new UserViewModel
+                {
+                    Name = "Teste get"
+                }
+            };
+
+            _mediator.Send(request).Returns(OperationResult.Success(userSimleGetResultViewModel));
+            //Act
+            var response = await _sut.GetUsers();
             var statusCodeResult = (IStatusCodeActionResult)response;
             //Assert
             Assert.True(statusCodeResult.StatusCode == StatusCodes.Status200OK);

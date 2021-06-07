@@ -19,18 +19,18 @@ namespace Domain.RequestHandlers
         public CreateUserRequestHandler(IUserRepository userRepository, IMediator mediator)
         { _userRepository = userRepository; _mediator = mediator; }
 
-        public Task<OperationResult> Handle(CreateUserRequest request, CancellationToken cancellationToken)
+        public async Task<OperationResult> Handle(CreateUserRequest request, CancellationToken cancellationToken)
         {
             try
             {
-                 _userRepository.Insert(new User() { Name = request.Name });
-                _mediator.Publish(new UserNotificationModel(request.Name));
+                await _userRepository.InsertAsync(new User() { Name = request.Name });
+                await _mediator.Publish(new UserNotificationModel(request.Name));
 
-                return Task.FromResult(OperationResult.Success());
+                return OperationResult.Success();
             }
             catch (Exception ex)
             {
-                return Task.FromResult(OperationResult.Error(ex));
+                return OperationResult.Error(ex);
             }
         }
     }

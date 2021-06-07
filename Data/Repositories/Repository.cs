@@ -1,24 +1,28 @@
 ﻿using AutoMapper;
 using AutoMapper.Extensions.ExpressionMapping;
-using Domain.Models;
 using Core.Repositories;
+using Domain.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using System;
+using System.Collections.Generic;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Reflection;
+using System.Threading.Tasks;
 
 namespace Data.Repositories
 {
     public class Repository<T, TDbContext> : IRepository<T>
-            where T : Entity
-            where TDbContext : DbContext
+           where T : Entity
+           where TDbContext : DbContext
     {
         protected readonly TDbContext _context;
         protected readonly DbSet<T> _currentSet;
-        protected readonly AutoMapper.IConfigurationProvider _mapperConfigProvider;
+        protected readonly IConfigurationProvider _mapperConfigProvider;
 
         protected event BeforeChangeDelegate BeforeDelete;
+
         protected event BeforeChangeDelegate BeforeUpdate;
 
         public delegate void BeforeChangeDelegate(ref EntityEntry<T> entity);
@@ -30,11 +34,9 @@ namespace Data.Repositories
             _mapperConfigProvider = mapper.ConfigurationProvider;
         }
 
-        public T Get(long id)
-            => _currentSet.FirstOrDefault(e => e.Id == id);
 
-        public T GetAsNoTracking(long id)
-            => _currentSet.AsNoTracking().FirstOrDefault(e => e.Id == id);
+        public Task<T> GetByIdAsNoTrackingAsync(long id)
+            => _currentSet.AsNoTracking().FirstOrDefaultAsync(e => e.Id == id);
 
         public TViewModel GetProjected<TViewModel>(long id)
             => _currentSet.Where(e => e.Id == id).UseAsDataSource(_mapperConfigProvider).For<TViewModel>().FirstOrDefault();
@@ -42,31 +44,34 @@ namespace Data.Repositories
         public IQueryable<T> GetAll()
             => _currentSet;
 
+
+        public Task<List<T>> GetAllAsync()
+            => _currentSet.ToListAsync();
+
         public IQueryable<TViewModel> GetAllProjected<TViewModel>()
             => _currentSet.UseAsDataSource(_mapperConfigProvider).For<TViewModel>();
 
-        public long Insert(T entity)
+
+        public async Task<long> InsertAsync(T entity)
         {
-            _currentSet.Add(entity);
-            _context.SaveChanges();
+            await _currentSet.AddAsync(entity);
+            await _context.SaveChangesAsync();
             return entity.Id;
         }
-
-        public void Remove(long id)
+        public async Task UpdateAsync(T entity)
+        {
+            var entityEntry = _context.Entry(entity);
+            BeforeUpdate?.Invoke(ref entityEntry);
+            UpdateWithoutChangeCreatedDate(in entityEntry);
+            await _context.SaveChangesAsync();
+        }
+        public async Task DeleteAsync(long id)
         {
             var entityEntry = _context.Entry(CreateInstance<T>());
             entityEntry.Property<long>(nameof(Entity.Id)).CurrentValue = id;
             entityEntry.State = EntityState.Deleted;
             BeforeDelete?.Invoke(ref entityEntry);
-            _context.SaveChanges();
-        }
-
-        public void Update(T entity)
-        {
-            var entityEntry = _context.Entry(entity);
-            BeforeUpdate?.Invoke(ref entityEntry);
-            UpdateWithoutChangeCreatedDate(in entityEntry);
-            _context.SaveChanges();
+            await _context.SaveChangesAsync();
         }
 
         private static TEntity CreateInstance<TEntity>()
@@ -78,5 +83,79 @@ namespace Data.Repositories
             entityEntry.State = EntityState.Modified;
             entityEntry.Property(t => t.CreatedDate).IsModified = false;
         }
+        public async Task<bool> ExistAsync(Expression<Func<T, bool>> predicate)
+        {
+            return await _currentSet.AnyAsync(predicate);
+        }
+        public async Task<T> GetByIdAsync(long id)
+        {
+            return await _currentSet.FindAsync(id);
+        }
+        public async Task<T> FindAsync(Expression<Func<T, bool>> match)
+        {
+            return await _currentSet.SingleOrDefaultAsync(match);
+        }
+        public async Task<ICollection<T>> FindAllAsync(Expression<Func<T, bool>> match)
+        {
+            return await _currentSet.Where(match).ToListAsync();
+        }
+        public async Task<int> CountAsync()
+        {
+            return await _currentSet.CountAsync();
+        }
+        public async Task<IList<T>> GetAllIncludeAsync(params Expression<Func<T, object>>[] navigationProperties)
+        {
+            IQueryable<T> dbQuery = _currentSet;
+
+            //Apply eager loading
+            foreach (var navigationProperty in navigationProperties)
+                dbQuery = dbQuery.Include(navigationProperty);
+
+            return await dbQuery.AsNoTracking().ToListAsync();
+        }
+        public async Task<IList<T>> GetIncludeListAsync(Func<T, bool> where, params Expression<Func<T, object>>[] navigationProperties)
+        {
+            IQueryable<T> dbQuery = _currentSet;
+
+            //Apply eager loading
+            foreach (var navigationProperty in navigationProperties)
+                dbQuery = dbQuery.Include(navigationProperty);
+
+            dbQuery = dbQuery.AsNoTracking().Where(where).AsQueryable();
+
+            return await dbQuery.ToListAsync();
+        }
+        public async Task<T> GetSingleIncludeAsync(Expression<Func<T, bool>> where,
+            params Expression<Func<T, object>>[] navigationProperties)
+        {
+            T item = null;
+            IQueryable<T> dbQuery = _currentSet;
+
+            //Apply eager loading
+            if (navigationProperties.Any())
+                foreach (var navigationProperty in navigationProperties)
+                    dbQuery = dbQuery.Include(navigationProperty);
+            else
+                foreach (var property in _context.Model.FindEntityType(typeof(T)).GetNavigations())
+                    dbQuery = dbQuery.Include(property.Name);
+
+            item = await dbQuery
+                .AsNoTracking() //Don't track any changes for the selected item
+                .SingleOrDefaultAsync(where); //Apply where clause
+            return item;
+        }
+        public async Task<ICollection<T>> PaggedListAsync(int? pageSize, int? page, params Expression<Func<T, object>>[] navigationProperties)
+        {
+            IQueryable<T> query = _context.Set<T>();
+
+            foreach (Expression<Func<T, object>> navigationProperty in navigationProperties)
+                query = query.Include<T, object>(navigationProperty);
+
+            if (page != null && pageSize != null)
+                query = query.Skip((page.Value - 1) * pageSize.Value).Take(pageSize.Value);
+
+            return await query.ToListAsync();
+        }
     }
+
 }
